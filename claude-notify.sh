@@ -86,12 +86,23 @@ raw_msg=$(printf '%s' "$payload" | jq -r '.message // ""' 2>/dev/null || echo ""
 cwd=$(printf '%s' "$payload" | jq -r '.cwd // ""' 2>/dev/null || echo "")
 transcript=$(printf '%s' "$payload" | jq -r '.transcript_path // ""' 2>/dev/null || echo "")
 
+perm_tool=""
+if [[ "$raw_msg" == *"permission to use "* ]]; then
+  perm_tool=$(printf '%s' "$raw_msg" | sed -E 's/.*permission to use ([A-Za-z_]+).*/\1/')
+fi
+
 action=""
 last_tool=""
 if [[ -n "$transcript" && -f "$transcript" ]]; then
-  last_tu=$(tail -200 "$transcript" 2>/dev/null \
-    | jq -c 'select(.message.content? | type=="array") | .message.content[]? | select(.type=="tool_use")' 2>/dev/null \
-    | tail -1)
+  if [[ -n "$perm_tool" ]]; then
+    last_tu=$(tail -200 "$transcript" 2>/dev/null \
+      | jq -c --arg t "$perm_tool" 'select(.message.content? | type=="array") | .message.content[]? | select(.type=="tool_use" and .name == $t)' 2>/dev/null \
+      | tail -1)
+  else
+    last_tu=$(tail -200 "$transcript" 2>/dev/null \
+      | jq -c 'select(.message.content? | type=="array") | .message.content[]? | select(.type=="tool_use")' 2>/dev/null \
+      | tail -1)
+  fi
   if [[ -n "$last_tu" ]]; then
     tname=$(printf '%s' "$last_tu" | jq -r '.name // ""')
     last_tool="$tname"
@@ -128,6 +139,24 @@ if [[ -n "$transcript" && -f "$transcript" ]]; then
       AskUserQuestion)
         q=$(printf '%s' "$last_tu" | jq -r '.input.questions[0].question // ""' | cut -c1-50)
         action="问你「${q}」"
+        ;;
+      TaskCreate|TaskUpdate|TaskGet|TaskList)
+        action="更新任务列表"
+        ;;
+      TaskOutput|TaskStop)
+        action="管后台任务"
+        ;;
+      EnterPlanMode|ExitPlanMode)
+        action="切换规划模式"
+        ;;
+      EnterWorktree|ExitWorktree)
+        action="切工作分支目录"
+        ;;
+      Agent)
+        action="派个子代理去干活"
+        ;;
+      Skill)
+        action="调用一个 Skill"
         ;;
       mcp__*)
         action="调用 ${tname#mcp__}"
