@@ -1,65 +1,69 @@
 # claude-lark-notify
 
-Claude Code 卡住就推飞书 —— Claude 要权限确认 / 问你问题 / 闲置等输入时，往你飞书私聊里发一条带加急的消息，让你别再错过。
+Ping yourself on Lark whenever Claude Code pauses — permission prompts, AskUserQuestion, 60s idle, and API errors all push a message (with urgent-app) to your own Lark DM so you don't miss it.
 
-## 这是啥
+> 中文版 / Chinese version: [claude-feishu-notify](https://github.com/cabiriawzy-hub/claude-feishu-notify)
 
-一个 Claude Code [Skill](https://docs.claude.com/en/docs/claude-code/skills) + 一个 Notification 钩子脚本。装好之后：
+## What is this
 
-- **权限确认**（Claude 想跑个 Bash、抓个网页、删个文件）→ 秒推加急
-- **问你问题**（AskUserQuestion）→ 60 秒没回应推加急
-- **闲置摸鱼**（Claude 干完活等你下一步）→ 60 秒没回应推普通消息
-- 消息带**中文化的操作描述**（比如 `git push origin main` → "把代码推到远端"）和**项目路径**
+A Claude Code [Skill](https://docs.claude.com/en/docs/claude-code/skills) plus two hook scripts. Once installed:
 
-## 依赖
+- **Permission prompts** (Claude wants to run a Bash command, fetch a URL, delete a file) → instant urgent ping
+- **AskUserQuestion** → 60s no-response urgent ping
+- **Idle** (Claude finished a turn and is waiting for you) → 60s no-response normal ping
+- **API errors** (Request too large / rate limit / overloaded / context full) → instant urgent ping via `Stop` hook
+- Every message includes a **humanized action description** (e.g. `git push origin main` → "push code to remote") and the **project path**
+
+## Dependencies
 
 - [Claude Code](https://claude.com/claude-code)
-- [`lark-cli`](https://bytedance.larkoffice.com)（字节内部飞书 CLI；非字节用户需要自己封一层等价的 `messages-send` + `urgent_app` 调用）
-- `jq`（`brew install jq`）
-- 飞书应用已开 `im:message.urgent` 或 `im:message.urgent:app_send` scope —— 不开也能用，只是消息不会加急
+- [`lark-cli`](https://bytedance.larkoffice.com/docx/WnHkdJQM6oGpQFxm9i7ckVdenSh) — a public Lark/Feishu CLI. Install guide: https://bytedance.larkoffice.com/wiki/P6DiwXsrZiMYBOk2ikzc9Btanee
+- `jq` (`brew install jq`)
+- Lark app with `im:message.urgent` or `im:message.urgent:app_send` scope — optional; without it messages still send, they just don't urgent-ping
 
-## 一键安装
+## One-shot install
 
 ```bash
 git clone https://github.com/cabiriawzy-hub/claude-lark-notify.git \
-  ~/.claude/skills/lark-notify-setup
+  ~/.claude/skills/claude-lark-notify
 ```
 
-然后在 Claude Code 里说一句：
+Then in Claude Code, just say:
 
 ```
-/lark-notify-setup
+/claude-lark-notify
 ```
 
-或者口语："帮我装飞书提醒"。Claude 会自动：
+Or in natural language: "install lark notify for me". Claude will automatically:
 
-1. 检查 `lark-cli` / `jq` 装了没、登录了没
-2. 从 `lark-cli auth status` 抽你的 `open_id` 并跟你确认
-3. 把钩子脚本填好 `open_id` 落到 `~/.claude/hooks/claude-notify.sh`
-4. 幂等合并进 `~/.claude/settings.json`（保留你已有的配置）
-5. 发一条测试消息 + 加急，确认链路通
+1. Check that `lark-cli` / `jq` are installed and logged in
+2. Pull your `open_id` from `lark-cli auth status` and confirm with you
+3. Drop the hook scripts into `~/.claude/hooks/claude-notify.sh` and `~/.claude/hooks/claude-error-notify.sh` with your `open_id` filled in
+4. Idempotent-merge into `~/.claude/settings.json` (preserves your existing config)
+5. Send two test messages + urgent-app to verify the pipeline
 
-## 关掉 / 卸载
+## Disable / uninstall
 
-临时闭嘴：
+Temporarily mute:
 
 ```bash
 export CLAUDE_NOTIFY_DISABLE=1
 ```
 
-永久卸载：
+Permanent uninstall:
 
 ```bash
-rm ~/.claude/hooks/claude-notify.sh
-# 再从 ~/.claude/settings.json 里移除 Notification 和 UserPromptSubmit 的条目
+rm ~/.claude/hooks/claude-notify.sh ~/.claude/hooks/claude-error-notify.sh
+# Then remove the Notification / Stop / UserPromptSubmit entries from ~/.claude/settings.json
 ```
 
-## 已知限制
+## Known limitations
 
-- **Notification 不是实时**：Claude 问问题时钩子要等 ~60 秒空闲才响，秒答会绕过。权限确认是实时的。
-- **用户身份发不了消息**：飞书 `im:message.send_as_user` 通常被企业管控，所以脚本固定用应用身份（`--as bot`）。
-- **加急需要应用权限**：`im:message.urgent` / `im:message.urgent:app_send` 常被企业管控，可能要找管理员加白名单。
+- **Notification is not real-time**: when Claude asks a question, the hook waits ~60s of idle before firing. Permission prompts are real-time.
+- **Can't send as a user**: `im:message.send_as_user` is typically locked down at the enterprise level, so the script always uses the app identity (`--as bot`).
+- **Urgent needs an app scope**: `im:message.urgent` / `im:message.urgent:app_send` are often gated behind admin approval — ask your admin to whitelist them.
+- **Stop hook fires on every turn-stop**: but the script filters — only pushes when the last assistant record has `isApiErrorMessage=true`. Normal completions are zero-noise.
 
-## 日志
+## Logs
 
-所有发送记录都在 `/tmp/claude-notify.log`，有问题翻这里。
+Every send is recorded in `/tmp/claude-notify.log` — check there when debugging.

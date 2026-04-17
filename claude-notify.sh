@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code Notification hook → Feishu/Lark message (with urgent-app push).
-# Installed by the lark-notify-setup skill. Edit OPEN_ID at the top if it changes.
+# Claude Code Notification hook → Lark/Feishu message (with urgent-app push).
+# Installed by the claude-lark-notify skill. Edit OPEN_ID at the top if it changes.
 set -euo pipefail
 
 [[ "${CLAUDE_NOTIFY_DISABLE:-}" == "1" ]] && exit 0
@@ -15,69 +15,59 @@ humanize_bash() {
   local c="$1"
   c=$(printf '%s' "$c" | sed -E 's/^([[:space:]]*[A-Z_][A-Z0-9_]*=[^[:space:]]+[[:space:]]+)+//; s/^[[:space:]]+//')
   case "$c" in
-    "rm -rf"*)                          echo "⚠️ 删掉整个文件夹（不可逆！）" ;;
-    "rm "*)                             echo "删文件" ;;
-    "git push"*)                        echo "把代码推到远端" ;;
-    "git pull"*|"git fetch"*)           echo "拉远端代码" ;;
-    "git commit"*)                      echo "提交代码改动" ;;
-    "git add"*)                         echo "暂存改动" ;;
-    "git clone"*)                       echo "克隆仓库" ;;
-    "git checkout"*|"git switch"*)      echo "切分支" ;;
-    "git merge"*)                       echo "合并分支" ;;
-    "git rebase"*)                      echo "变基（整理提交记录）" ;;
-    "git reset"*|"git revert"*|"git restore"*) echo "撤销改动" ;;
-    "git status"*|"git log"*|"git diff"*|"git show"*|"git branch"*) echo "看代码状态" ;;
-    "git "*)                            echo "跑 git 命令" ;;
-    "npm install"*|"npm i"*|"pnpm install"*|"yarn install"*|"yarn") echo "装项目依赖" ;;
-    "npm run dev"*|"npm start"*|"npm run start"*) echo "启动开发服务器" ;;
-    "npm run build"*|"pnpm build"*)     echo "打包项目" ;;
-    "npm run typecheck"*|"npm run test"*|"npm test"*|"npm t"*) echo "跑测试/代码检查" ;;
-    "npm run lint"*)                    echo "跑代码检查" ;;
-    "npm run"*|"pnpm run"*|"bun run"*)  echo "跑项目脚本" ;;
-    "npx "*|"bunx "*|"pnpx "*)          echo "临时跑个工具" ;;
-    "curl "*)                           echo "访问网络/调接口" ;;
-    "wget "*)                           echo "下载文件" ;;
-    "mkdir "*)                          echo "新建文件夹" ;;
-    "mv "*)                             echo "移动/重命名文件" ;;
-    "cp "*)                             echo "复制文件" ;;
-    "chmod "*|"chown "*)                echo "改文件权限" ;;
-    "ln "*)                             echo "做快捷方式" ;;
-    "lark-cli docs"*)                   echo "操作飞书文档" ;;
-    "lark-cli wiki"*)                   echo "操作飞书 Wiki" ;;
-    "lark-cli minutes"*)                echo "看飞书会议记录" ;;
-    "lark-cli vc"*)                     echo "看飞书会议信息" ;;
-    "lark-cli whiteboard"*)             echo "操作飞书画板" ;;
-    "lark-cli im"*)                     echo "发/管飞书消息" ;;
-    "lark-cli api"*)                    echo "调飞书接口" ;;
-    "lark-cli auth"*)                   echo "飞书登录/授权" ;;
-    "lark-cli schema"*)                 echo "查飞书接口定义" ;;
-    "lark-cli "*)                       echo "跑飞书命令" ;;
-    "python3 "*|"python "*)             echo "跑 Python 脚本" ;;
-    "node "*)                           echo "跑 Node.js 脚本" ;;
-    "bun "*)                            echo "跑 Bun 命令" ;;
-    "pip install"*)                     echo "装 Python 包" ;;
-    "pip "*)                            echo "管 Python 包" ;;
-    "brew install"*)                    echo "装软件" ;;
-    "brew "*)                           echo "管电脑软件" ;;
-    "docker "*)                         echo "操作容器" ;;
-    "ssh "*)                            echo "远程登录到别的电脑" ;;
-    "kill "*|"pkill "*|"killall "*)     echo "结束某个进程" ;;
-    "ps "*|"ps"|"top"|"htop")           echo "看正在跑的进程" ;;
-    "ls"|"ls "*)                        echo "看文件列表" ;;
-    "cat "*|"head "*|"tail "*|"bat "*)  echo "看文件内容" ;;
-    "find "*|"fd "*)                    echo "查找文件" ;;
-    "grep "*|"rg "*|"ack "*)            echo "搜关键字" ;;
-    "open "*)                           echo "打开文件/网页" ;;
-    "gh pr"*)                           echo "操作 GitHub PR" ;;
-    "gh issue"*)                        echo "操作 GitHub Issue" ;;
-    "gh "*)                             echo "操作 GitHub" ;;
-    "firecrawl "*)                      echo "抓网页" ;;
-    "claude "*|"claude")                echo "操作 Claude Code 本身" ;;
-    "cd "*|"cd")                        echo "切目录" ;;
-    "echo "*|"printf "*)                echo "打印点东西" ;;
-    "sleep "*)                          echo "等一会儿" ;;
-    "jq "*)                             echo "处理 JSON 数据" ;;
-    *)                                  echo "" ;;
+    "rm -rf"*)                                     echo "⚠️ delete an entire folder (irreversible!)" ;;
+    "rm "*)                                        echo "delete a file" ;;
+    "git push"*)                                   echo "push code to remote" ;;
+    "git pull"*|"git fetch"*)                      echo "pull from remote" ;;
+    "git commit"*)                                 echo "commit changes" ;;
+    "git add"*)                                    echo "stage changes" ;;
+    "git clone"*)                                  echo "clone a repo" ;;
+    "git checkout"*|"git switch"*)                 echo "switch branch" ;;
+    "git merge"*)                                  echo "merge branches" ;;
+    "git rebase"*)                                 echo "rebase" ;;
+    "git reset"*|"git revert"*|"git restore"*)     echo "undo changes" ;;
+    "git status"*|"git log"*|"git diff"*|"git show"*|"git branch"*) echo "inspect git state" ;;
+    "git "*)                                       echo "run a git command" ;;
+    "npm install"*|"npm i"*|"pnpm install"*|"yarn install"*|"yarn") echo "install dependencies" ;;
+    "npm run dev"*|"npm start"*|"npm run start"*)  echo "start the dev server" ;;
+    "npm run build"*|"pnpm build"*)                echo "build the project" ;;
+    "npm run typecheck"*|"npm run test"*|"npm test"*|"npm t"*) echo "run tests" ;;
+    "npm run lint"*)                               echo "run the linter" ;;
+    "npm run"*|"pnpm run"*|"bun run"*)             echo "run a project script" ;;
+    "npx "*|"bunx "*|"pnpx "*)                     echo "run a one-off tool" ;;
+    "curl "*)                                      echo "hit the network / call an API" ;;
+    "wget "*)                                      echo "download a file" ;;
+    "mkdir "*)                                     echo "create a folder" ;;
+    "mv "*)                                        echo "move/rename a file" ;;
+    "cp "*)                                        echo "copy a file" ;;
+    "chmod "*|"chown "*)                           echo "change file permissions" ;;
+    "ln "*)                                        echo "make a symlink" ;;
+    "lark-cli "*)                                  echo "run a lark-cli command" ;;
+    "python3 "*|"python "*)                        echo "run a Python script" ;;
+    "node "*)                                      echo "run a Node.js script" ;;
+    "bun "*)                                       echo "run a Bun command" ;;
+    "pip install"*)                                echo "install a Python package" ;;
+    "pip "*)                                       echo "manage Python packages" ;;
+    "brew install"*)                               echo "install software" ;;
+    "brew "*)                                      echo "manage software" ;;
+    "docker "*)                                    echo "work with containers" ;;
+    "ssh "*)                                       echo "SSH into another machine" ;;
+    "kill "*|"pkill "*|"killall "*)                echo "kill a process" ;;
+    "ps "*|"ps"|"top"|"htop")                      echo "list running processes" ;;
+    "ls"|"ls "*)                                   echo "list files" ;;
+    "cat "*|"head "*|"tail "*|"bat "*)             echo "view a file" ;;
+    "find "*|"fd "*)                               echo "find files" ;;
+    "grep "*|"rg "*|"ack "*)                       echo "search for text" ;;
+    "open "*)                                      echo "open a file/URL" ;;
+    "gh pr"*)                                      echo "work with a GitHub PR" ;;
+    "gh issue"*)                                   echo "work with a GitHub Issue" ;;
+    "gh "*)                                        echo "work with GitHub" ;;
+    "claude "*|"claude")                           echo "manage Claude Code itself" ;;
+    "cd "*|"cd")                                   echo "change directory" ;;
+    "echo "*|"printf "*)                           echo "print something" ;;
+    "sleep "*)                                     echo "wait a moment" ;;
+    "jq "*)                                        echo "process JSON" ;;
+    *)                                             echo "" ;;
   esac
 }
 
@@ -113,53 +103,53 @@ if [[ -n "$transcript" && -f "$transcript" ]]; then
         if [[ -n "$human" ]]; then
           action="$human"
         else
-          action="跑 ${cmd}"
+          action="run \`${cmd}\`"
         fi
         ;;
       Edit|Write|NotebookEdit)
         fp=$(printf '%s' "$last_tu" | jq -r '.input.file_path // ""')
-        action="改 $(basename "$fp")"
+        action="edit $(basename "$fp")"
         ;;
       Read)
         fp=$(printf '%s' "$last_tu" | jq -r '.input.file_path // ""')
-        action="看 $(basename "$fp")"
+        action="read $(basename "$fp")"
         ;;
       WebFetch)
         url=$(printf '%s' "$last_tu" | jq -r '.input.url // ""' | cut -c1-60)
-        action="抓 ${url}"
+        action="fetch ${url}"
         ;;
       WebSearch)
         q=$(printf '%s' "$last_tu" | jq -r '.input.query // ""' | cut -c1-40)
-        action="搜 ${q}"
+        action="search ${q}"
         ;;
       Glob|Grep)
         p=$(printf '%s' "$last_tu" | jq -r '.input.pattern // ""' | cut -c1-40)
-        action="搜代码 ${p}"
+        action="grep ${p}"
         ;;
       AskUserQuestion)
         q=$(printf '%s' "$last_tu" | jq -r '.input.questions[0].question // ""' | cut -c1-50)
-        action="问你「${q}」"
+        action="ask \"${q}\""
         ;;
       TaskCreate|TaskUpdate|TaskGet|TaskList)
-        action="更新任务列表"
+        action="update the task list"
         ;;
       TaskOutput|TaskStop)
-        action="管后台任务"
+        action="manage a background task"
         ;;
       EnterPlanMode|ExitPlanMode)
-        action="切换规划模式"
+        action="toggle plan mode"
         ;;
       EnterWorktree|ExitWorktree)
-        action="切工作分支目录"
+        action="switch worktree"
         ;;
       Agent)
-        action="派个子代理去干活"
+        action="dispatch a subagent"
         ;;
       Skill)
-        action="调用一个 Skill"
+        action="invoke a skill"
         ;;
       mcp__*)
-        action="调用 ${tname#mcp__}"
+        action="call ${tname#mcp__}"
         ;;
       "")
         ;;
@@ -176,40 +166,40 @@ case "$raw_msg" in
   *"permission to use "*)
     tool=$(printf '%s' "$raw_msg" | sed -E 's/.*permission to use ([A-Za-z_]+).*/\1/')
     if [[ -n "$action" ]]; then
-      friendly="🐾 Claude 想${action}，同意一下喽～"
+      friendly="🐾 Claude wants to ${action} — approve to continue"
     else
-      friendly="🐾 Claude 想用 ${tool} 干点小事，同意一下喽～"
+      friendly="🐾 Claude wants to use ${tool} — approve to continue"
     fi
     urgent=1
     ;;
   *"permission"*|*"Permission"*)
     if [[ -n "$action" ]]; then
-      friendly="✋ Claude 想${action}，点个同意我就继续～"
+      friendly="✋ Claude wants to ${action} — tap approve to continue"
     else
-      friendly="✋ Claude 卡住啦，点个同意我就继续～"
+      friendly="✋ Claude is waiting for a permission tap"
     fi
     urgent=1
     ;;
   *"waiting for your input"*|*"waiting for input"*)
     if [[ "$last_tool" == "AskUserQuestion" ]]; then
-      friendly="🙋 Claude ${action}，帮我选一个～"
+      friendly="🙋 Claude wants to ${action} — pick an option"
       urgent=1
     else
-      friendly="💤 Claude 活干完摸鱼呢，来看看下一步？"
+      friendly="💤 Claude is done — come back when you're ready"
     fi
     ;;
   *"needs your attention"*|*"needs attention"*)
     if [[ "$last_tool" == "AskUserQuestion" ]]; then
-      friendly="🙋 Claude ${action}，帮我选一个～"
+      friendly="🙋 Claude wants to ${action} — pick an option"
     elif [[ -n "$action" ]]; then
-      friendly="🔔 Claude 想${action}，过来看一眼～"
+      friendly="🔔 Claude wants to ${action} — take a look"
     else
-      friendly="🔔 Claude 有事找你，过来看一眼～"
+      friendly="🔔 Claude needs you — take a look"
     fi
     urgent=1
     ;;
   "")
-    friendly="👀 Claude 找不到你啦，回来呀～"
+    friendly="👀 Claude can't find you — come back"
     ;;
   *)
     msg_clean=$(printf '%s' "$raw_msg" | sed -E 's/^[Cc]laude([[:space:]][Cc]ode)?[[:space:]]+//')
