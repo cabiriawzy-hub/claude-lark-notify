@@ -185,7 +185,18 @@ case "$raw_msg" in
       friendly="🙋 Claude wants to ${action} — pick an option"
       urgent=1
     else
-      friendly="💤 Claude is done — come back when you're ready"
+      last_text=""
+      if [[ -n "$transcript" && -f "$transcript" ]]; then
+        last_text=$(tail -50 "$transcript" 2>/dev/null \
+          | jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' 2>/dev/null \
+          | tail -1 | tr -d '[:space:]' | tail -c 3)
+      fi
+      if [[ "$last_text" == *"?" || "$last_text" == *"？" ]]; then
+        friendly="❓ Claude is asking you a question — reply to continue"
+        urgent=1
+      else
+        friendly="💤 Claude is done — come back when you're ready"
+      fi
     fi
     ;;
   *"needs your attention"*|*"needs attention"*)
