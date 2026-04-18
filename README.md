@@ -13,6 +13,7 @@ A Claude Code [Skill](https://docs.claude.com/en/docs/claude-code/skills) plus t
 - **Idle** (Claude finished a turn and is waiting for you) → 60s no-response normal ping
 - **API errors** (Request too large / rate limit / overloaded / context full) → instant urgent ping via `Stop` hook
 - Every message includes a **humanized action description** (e.g. `git push origin main` → "push code to remote") and the **project path**
+- **iTerm2 click-to-focus** (optional, macOS only) → click the "Click to focus" link in Lark and the matching iTerm2 session jumps to the front
 
 ## Dependencies
 
@@ -55,6 +56,10 @@ Permanent uninstall:
 ```bash
 rm ~/.claude/hooks/claude-notify.sh ~/.claude/hooks/claude-error-notify.sh
 # Then remove the Notification / Stop / UserPromptSubmit entries from ~/.claude/settings.json
+
+# If the iTerm2 click-to-focus daemon was installed, also run:
+launchctl bootout gui/$UID ~/Library/LaunchAgents/com.claude.focus-daemon.plist
+rm ~/Library/LaunchAgents/com.claude.focus-daemon.plist ~/.claude/hooks/claude-focus-daemon.py
 ```
 
 ## Known limitations
@@ -63,6 +68,7 @@ rm ~/.claude/hooks/claude-notify.sh ~/.claude/hooks/claude-error-notify.sh
 - **Can't send as a user**: `im:message.send_as_user` is typically locked down at the enterprise level, so the script always uses the app identity (`--as bot`).
 - **Urgent needs an app scope**: `im:message.urgent` / `im:message.urgent:app_send` are often gated behind admin approval — ask your admin to whitelist them.
 - **Stop hook fires on every turn-stop**: but the script filters — only pushes when the last assistant record has `isApiErrorMessage=true`. Normal completions are zero-noise.
+- **Click-to-focus is iTerm2-only**: relies on the `ITERM_SESSION_ID` env var + iTerm2's AppleScript `unique id`. Terminal.app / Ghostty / WezTerm / SSH don't have that env var, so messages won't include the link but everything else works.
 
 ## Logs
 

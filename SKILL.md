@@ -15,7 +15,8 @@ Both push with urgent-app so the Lark app will ping through.
 Core files:
 - `~/.claude/skills/claude-lark-notify/claude-notify.sh` (Notification template, with `__OPEN_ID__` placeholder)
 - `~/.claude/skills/claude-lark-notify/claude-error-notify.sh` (Stop template, same placeholder)
-- After install: both land in `~/.claude/hooks/` with `OPEN_ID` filled in
+- `~/.claude/skills/claude-lark-notify/claude-focus-daemon.py` (optional: click-to-focus iTerm2 session, macOS only)
+- After install: hook scripts land in `~/.claude/hooks/` with `OPEN_ID` filled in
 - `~/.claude/settings.json` gets three hook entries registered: `Notification`, `Stop`, `UserPromptSubmit`
 
 ## Install checklist
@@ -96,7 +97,63 @@ jq --arg nh "$NOTIFY_HOOK" --arg eh "$ERROR_HOOK" --arg mc "$MARKER_CLEAR" '
 ' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
 ```
 
-### 5. End-to-end test
+### 5. Optional: install the iTerm2 click-to-focus daemon
+
+**macOS + iTerm2 only.** If the user is on non-macOS or uses Terminal.app / Ghostty / WezTerm, **skip this step** — the hook won't add a link to messages either.
+
+First ask the user: "Do you use iTerm2? If yes, clicking a link in the Lark message will bring the matching terminal session to the front." Use `AskUserQuestion` to let them pick Install / Skip.
+
+If they choose install, run:
+
+```bash
+# Copy the daemon script to hooks dir
+cp ~/.claude/skills/claude-lark-notify/claude-focus-daemon.py ~/.claude/hooks/claude-focus-daemon.py
+chmod +x ~/.claude/hooks/claude-focus-daemon.py
+
+# Generate launchd plist (generated fresh because paths are per-user)
+mkdir -p ~/Library/LaunchAgents
+cat > ~/Library/LaunchAgents/com.claude.focus-daemon.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.claude.focus-daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>$HOME/.claude/hooks/claude-focus-daemon.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/claude-focus-daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/claude-focus-daemon.log</string>
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
+EOF
+
+# Load via launchd (bootout first if already loaded, idempotent)
+launchctl bootout gui/$UID ~/Library/LaunchAgents/com.claude.focus-daemon.plist 2>/dev/null || true
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.claude.focus-daemon.plist
+
+# Verify the daemon came up
+sleep 1
+curl -sS -o /dev/null -w "%{http_code}" "http://127.0.0.1:47823/focus?id=00000000-0000-0000-0000-000000000000"
+# Expected: 404 (valid UUID shape but no matching session) — means the daemon is alive
+```
+
+Verification:
+- `404` → daemon is up, tell the user it's installed
+- `000` or connection error → daemon didn't start; have the user check `/tmp/claude-focus-daemon.log`
+- On non-iTerm terminals the hook silently skips the link — no error
+
+### 6. End-to-end test
 
 **Notification hook** (permission prompt scenario):
 
@@ -128,13 +185,14 @@ Both test messages should land in Lark. Verification:
 - Log contains `urgent_app for om_...` + `"code": 0` → urgent-app succeeded
 - Log contains `(urgent failed)` or `permission_violations` → urgent scope isn't granted. Tell the user: messages are sent but not urgent-pinged. To enable urgent, add `im:message.urgent` or `im:message.urgent:app_send` scope to the bot app in the Lark developer console.
 
-### 6. Wrap up
+### 7. Wrap up
 
 Tell the user:
 - ✅ Done — open the Lark self-chat, you should see two test messages
 - Log file: `/tmp/claude-notify.log` (check here when debugging)
 - To temporarily mute: `export CLAUDE_NOTIFY_DISABLE=1`
 - To uninstall: delete `~/.claude/hooks/claude-notify.sh` + `~/.claude/hooks/claude-error-notify.sh`, then remove the three hook entries from `~/.claude/settings.json`
+- If the iTerm2 click-to-focus daemon was installed, also run: `launchctl bootout gui/$UID ~/Library/LaunchAgents/com.claude.focus-daemon.plist && rm ~/Library/LaunchAgents/com.claude.focus-daemon.plist ~/.claude/hooks/claude-focus-daemon.py`
 
 ## Caveats
 
@@ -143,3 +201,4 @@ Tell the user:
 - **Stop hook runs on every turn-stop**: but the script filters — it only pushes when the last assistant record has `isApiErrorMessage=true`. Normal completions are zero-noise.
 - **Urgent needs an app scope**: `im:message.urgent` / `im:message.urgent:app_send` are often locked behind enterprise admin approval. Message sending itself is unaffected.
 - **OPEN_ID is hard-coded**: the template seds the open_id directly into the script — it doesn't read env vars. Re-run the skill to switch accounts (or edit the `OPEN_ID=` line at the top of each hook).
+- **Click-to-focus is iTerm2-only**: the daemon relies on the `ITERM_SESSION_ID` env var + iTerm2's AppleScript `unique id`. Terminal.app / Ghostty / WezTerm / SSH sessions don't set that env var, so the hook silently skips adding the link.
